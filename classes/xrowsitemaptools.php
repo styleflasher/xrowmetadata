@@ -787,6 +787,7 @@ class xrowSitemapTools
             $output = new ezcConsoleOutput();
         }
 
+
         while ( $counter <= $runs )
         {
             eZDebug::writeDebug( 'Run ' . $counter . ' of ' . $runs . ' runs' );
@@ -808,6 +809,7 @@ class xrowSitemapTools
             while ( $params['Offset'] < $max_all )
             {
                 $nodeArray = eZContentObjectTreeNode::subTreeByNodeID( $params, $rootNode->NodeID );
+                
                 foreach ( $nodeArray as $node )
                 {
                     $extensions = array();
