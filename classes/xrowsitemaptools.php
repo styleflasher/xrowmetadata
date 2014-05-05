@@ -489,14 +489,12 @@ class xrowSitemapTools
         }
         $rootNode = self::rootNode();
         $subtreeCount = eZContentObjectTreeNode::subTreeCountByNodeID( $params, $rootNode->NodeID );
-        
         if ( $subtreeCount <= 1 )
         {
             # could be an old installation with no fresh content!
             //throw new Exception( "No Items found under RootNode $rootNode->NodeID." );
             return;
         }
-        
         $sitemap = new xrowSitemap();
         // Generate Sitemap
         self::addNode( $sitemap, $rootNode );
@@ -602,7 +600,7 @@ class xrowSitemapTools
             $max_all += $max;
             $sitemap = new xrowSitemap();
         }
-        self::cleanDir($cachedir);
+        self::cleanDir($dir);
         //move all from cache to cluster filesystem
         foreach( $sitemapfiles as $key => $sitemapfile )
         {
