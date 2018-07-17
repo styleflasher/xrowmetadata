@@ -562,11 +562,11 @@ class xrowSitemapTools
         // Generate Sitemap
         self::addNode( $sitemap, $rootNode );
 
-        $additionalSubtreeCount = self::addSubtreeCount();
+        $subtreeCount += self::addSubtreeCount();
 
         self::addSubtree($sitemap);
 
-        $max = min( $max, $subtreeCount, $additionalSubtreeCount );
+        $max = min($max, $subtreeCount);
         $max_all = $max;
         $params['Limit'] = $limit;
         $params['Offset'] = 0;
@@ -706,16 +706,10 @@ class xrowSitemapTools
     public static function addSubtreeCount()
     {
         $cnt=0;
-        $ini = eZINI::instance('xrowsitemap.ini');
-        if ($ini->hasVariable('SitemapSettings', 'AdditionalSubtrees')) {
-            $subtrees = $ini->variable('SitemapSettings', 'AdditionalSubtrees');
-            foreach($subtrees as $siteaccess => $nodeListString) {
-                $nodeList = explode(";", $nodeListString);
-                self::$additionalSubtreeNodeIs = $nodeList;
-                foreach ($nodeList as $nodeId) {
-                    $cnt+= eZContentObjectTreeNode::subTreeCountByNodeID([], $nodeId);
-                }
-            }
+        $nodeList = self::getAdditionalSubtreeIds();
+        self::$additionalSubtreeNodeIs = $nodeList;
+        foreach ($nodeList as $nodeId) {
+            $cnt+= eZContentObjectTreeNode::subTreeCountByNodeID([], $nodeId);
         }
         return $cnt;
     }
@@ -724,14 +718,23 @@ class xrowSitemapTools
 
     public static function addSubtree($sitemap)
     {
+        $nodeList = self::getAdditionalSubtreeIds();
+        foreach ($nodeList as $nodeId) {
+            $node = eZContentObjectTreeNode::fetch($nodeId);
+            self::addNode($sitemap, $node);
+        }
+    }
+
+    public static function getAdditionalSubtreeIds()
+    {
+        $accessname = $GLOBALS['eZCurrentAccess']['name'];
         $ini = eZINI::instance('xrowsitemap.ini');
         if ($ini->hasVariable('SitemapSettings', 'AdditionalSubtrees')) {
             $subtrees = $ini->variable('SitemapSettings', 'AdditionalSubtrees');
             foreach($subtrees as $siteaccess => $nodeListString) {
-                $nodeList = explode(";", $nodeListString);
-                foreach ($nodeList as $nodeId) {
-                    $node = eZContentObjectTreeNode::fetch($nodeId);
-                    self::addNode($sitemap, $node);
+                if ($siteaccess === $accessname) {
+                    $nodeList = explode(";", $nodeListString);
+                    return $nodeList;
                 }
             }
         }
