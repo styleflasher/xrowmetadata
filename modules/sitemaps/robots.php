@@ -1,13 +1,24 @@
 <?php
-if ( file_exists( 'robots.txt' ) )
+$xrowsitemapINI = eZINI::instance( 'xrowsitemap.ini' );
+if ( $xrowsitemapINI->hasVariable( 'SitemapSettings', 'RobotsPath' ) )
 {
-    $content = file_get_contents( 'robots.txt' );
+    $robotspath = $xrowsitemapINI->variable( 'SitemapSettings', 'RobotsPath' );
 }
 else
 {
-    $content = '';
+    $robotspath = 'robots.txt';
 }
-$content .= "\nSitemap: http://" . $_SERVER['HTTP_HOST'] . "/sitemaps/index";
+$content = "Sitemap: https://" . $_SERVER['HTTP_HOST'] . "/sitemaps/index\n";
+
+if ( file_exists( $robotspath ) )
+{
+    $content .= file_get_contents( $robotspath );
+}
+else
+{
+    $content .= '';
+}
+
 // Set header settings
 header( 'Content-Type: text/plain; charset=UTF-8' );
 header( 'Content-Length: ' . strlen( $content ) );

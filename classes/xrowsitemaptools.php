@@ -43,7 +43,12 @@ class xrowSitemapTools
                 if ( $user instanceof eZUser )
                 {
                     $user->loginCurrent();
-                    call_user_func( $fnc );
+                    try{
+                        call_user_func( $fnc );
+                    }catch( Exception $e ){
+                        eZCLI::instance()->output( "Skipping access $siteaccess" );
+                        continue;
+                    }
                 }else{
                     continue;
                 }
@@ -64,12 +69,12 @@ class xrowSitemapTools
         {
             $uri = '/sitemaps/index';
             eZURI::transformURI( $uri );
-            $link = 'http://' . $hostname . $uri;
+            $link = 'https://' . $hostname . $uri;
             // google
-            $url = "http://www.google.com/webmasters/tools/ping?sitemap=" . $link;
+            $url = "https://www.google.com/webmasters/tools/ping?sitemap=" . $link;
             file_get_contents( $url );
             // bing
-            $url = "http://www.bing.com/webmaster/ping.aspx?siteMap=" . $link;
+            $url = "https://www.bing.com/webmaster/ping.aspx?siteMap=" . $link;
             file_get_contents( $url );
         }
     }
@@ -113,11 +118,15 @@ class xrowSitemapTools
 
     public static function getNewsConverter()
     {
-        $converter = eZExtension::getHandlerClass( new ezpExtensionOptions( array(
-            'iniFile' => 'xrowsitemap.ini' ,
-            'iniSection' => 'Settings' ,
-            'iniVariable' => 'NewsConverter'
-        ) ) );
+        $ini = eZINI::instance( 'xrowsitemap.ini' );
+        if ( $ini->hasVariable( 'Settings', 'NewsConverter' ) )
+        {
+            $converter = eZExtension::getHandlerClass( new ezpExtensionOptions( array(
+                'iniFile' => 'xrowsitemap.ini' ,
+                'iniSection' => 'Settings' ,
+                'iniVariable' => 'NewsConverter'
+            ) ) );
+        }
         if ( ! $converter )
         {
             $converter = new xrowSitemapConverter();
@@ -127,11 +136,15 @@ class xrowSitemapTools
 
     public static function getVideoConverter()
     {
-        $converter = eZExtension::getHandlerClass( new ezpExtensionOptions( array(
-            'iniFile' => 'xrowsitemap.ini' ,
-            'iniSection' => 'Settings' ,
-            'iniVariable' => 'VideoConverter'
-        ) ) );
+        $ini = eZINI::instance( 'xrowsitemap.ini' );
+        if ( $ini->hasVariable( 'Settings', 'VideoConverter' ) )
+        {
+            $converter = eZExtension::getHandlerClass( new ezpExtensionOptions( array(
+                'iniFile' => 'xrowsitemap.ini' ,
+                'iniSection' => 'Settings' ,
+                'iniVariable' => 'VideoConverter'
+            ) ) );
+        }
         if ( ! $converter )
         {
             $converter = new xrowSitemapConverter();
@@ -141,11 +154,15 @@ class xrowSitemapTools
 
     public static function getImageConverter()
     {
-        $converter = eZExtension::getHandlerClass( new ezpExtensionOptions( array(
-            'iniFile' => 'xrowsitemap.ini' ,
-            'iniSection' => 'Settings' ,
-            'iniVariable' => 'ImageConverter'
-        ) ) );
+        $ini = eZINI::instance( 'xrowsitemap.ini' );
+        if ( $ini->hasVariable( 'Settings', 'ImageConverter' ) )
+        {
+            $converter = eZExtension::getHandlerClass( new ezpExtensionOptions( array(
+                'iniFile' => 'xrowsitemap.ini' ,
+                'iniSection' => 'Settings' ,
+                'iniVariable' => 'ImageConverter'
+            ) ) );
+        }
         if ( ! $converter )
         {
             $converter = new xrowSitemapConverter();
@@ -241,8 +258,47 @@ class xrowSitemapTools
         $extensions[] = new xrowSitemapItemModified( $node->attribute( 'modified_subnode' ) );
 
         $url = $node->attribute( 'url_alias' );
+        
+        // Remove PathPrefix if needed
+        if ($ini->hasVariable( 'SitemapSettings', 'PathPrefix' ) )
+        {
+            $pathPrefixs = $ini->variable( 'SitemapSettings', 'PathPrefix' );
+            foreach ( $pathPrefixs as $pathPrefix_item )
+            {
+                $pathPrefix_to_access = explode( ';', $pathPrefix_item );
+                $accessname_item = $pathPrefix_to_access[1];
+                $pathPrefix_temp = $pathPrefix_to_access[0];
+                if ( $accessname_item == $GLOBALS['eZCurrentAccess']['name'] )
+                {
+                    $pathPrefix = $pathPrefix_temp;
+                    break;
+                } else {
+                    $pathPrefix = "";
+                }
+            }
+            if ( $url != '' && $pathPrefix != '' )
+            {
+                $pathPrefix .= '/';
+                if ( strncmp( $url, $pathPrefix, strlen( $pathPrefix ) ) == 0 )
+                {
+                    $url = substr( $url, strlen( $pathPrefix ) );
+                }
+            }
+        }
         $urlAlias = $url;
-
+        
+        //Ticket #10114 -  correction URLs
+        if ( $ini->hasVariable( 'SitemapSettings', 'HostUriMatchMapItems' ) )
+        {
+            $host_uri = self::getUri($ini->variable( 'SitemapSettings', 'HostUriMatchMapItems' ));
+        } elseif ( $site_ini->hasVariable( 'SiteAccessSettings', 'HostUriMatchMapItems' ))
+        {
+            $host_uri = self::getUri($site_ini->variable( 'SiteAccessSettings', 'HostUriMatchMapItems' ));
+        }
+        if ( $host_uri !== '') {
+            $url = $host_uri . '/' . $url;
+        }
+        
         // $urlAlias is kept 'as is' to be able to generate these links
         eZURI::transformURI( $urlAlias, true );
         if ( $ini->hasVariable( 'SitemapSettings', 'CreateAlternateLink' ) )
@@ -251,35 +307,40 @@ class xrowSitemapTools
             $ini->hasVariable( 'SitemapSettings', 'MobileSiteAccessName' ) != '' )
             {
                 $mobileSiteAccess = $ini->variable( 'SitemapSettings', 'MobileSiteAccessName' );
-                $mobileURL = 'http://' . self::domain() . '/' . $mobileSiteAccess . $urlAlias;
+                $mobileURL = 'https://' . self::domain() . '/' . $mobileSiteAccess . $urlAlias;
             }
             if ( $ini->hasVariable( 'SitemapSettings', 'MobileDomainName' ) &&
             $ini->hasVariable( 'SitemapSettings', 'MobileDomainName' ) != '' )
             {
                 $mobileDomain = $ini->variable( 'SitemapSettings', 'MobileDomainName' );
-                $mobileURL = 'http://' . $mobileDomain . $urlAlias;
+                $mobileURL = 'https://' . $mobileDomain . $urlAlias;
             }
             $extensions[] = new xrowSitemapItemAlternateLink( $mobileURL );
         }
 
         $transformURIMode = eZURI::getTransformURIMode();
         // force URL to be generated in 'full mode' if MatchOrder != uri
-        if( $site_ini->variable( 'MatchOrder', 'SiteAccessSettings' ) != 'uri' )
+        if( $site_ini->variable( 'SiteAccessSettings', 'MatchOrder' ) != 'uri' )
         {
             $transformURIMode = 'full';
         }
         eZURI::transformURI( $url, true, $transformURIMode );
 
+        if($transformURIMode == 'full')
+        {
+            $url = preg_replace("(^https?)", "https", $url );
+        }
+
         // only the URI mode is fully compatible with this $url generation
-        if( $site_ini->variable( 'MatchOrder', 'SiteAccessSettings' ) == 'uri' )
+        if( $site_ini->variable( 'SiteAccessSettings', 'MatchOrder' ) == 'uri' )
         {
             if ( $site_ini->variable( 'SiteAccessSettings', 'RemoveSiteAccessIfDefaultAccess' ) == 'enabled' or $ini->variable( 'Settings', 'HideSiteaccessAlways' ) == 'true' )
             {
-                $url = 'http://' . self::domain() . $url;
+                $url = 'https://' . self::domain() . $url;
             }
             else
             {
-                $url = 'http://' . self::domain() . '/' . $GLOBALS['eZCurrentAccess']['name'] . $url;
+                $url = 'https://' . self::domain() . '/' . $GLOBALS['eZCurrentAccess']['name'] . $url;
             }
         }
 
@@ -378,8 +439,8 @@ class xrowSitemapTools
 
     public static function createSitemap( $archive = false )
     {
-        $cli = $GLOBALS['cli'];
-        global $cli, $isQuiet;
+        $cli = eZCLI::instance();      
+
         $xrowsitemapINI = eZINI::instance( 'xrowsitemap.ini' );
         if ( ! $xrowsitemapINI->hasVariable( 'Settings', 'Archive' ) or $xrowsitemapINI->variable( 'Settings', 'Archive' ) != 'disabled' )
         {
@@ -411,7 +472,7 @@ class xrowSitemapTools
             $timestamp = $time->attribute( 'value' );
         }
         eZDebug::writeDebug( "Generating sitemap ...", __METHOD__ );
-        if ( ! $isQuiet )
+        if ( ! $cli->isQuiet() )
         {
             $cli->output( "Generating sitemap for siteaccess " . $GLOBALS['eZCurrentAccess']['name'] . " \n" );
         }
@@ -505,7 +566,7 @@ class xrowSitemapTools
         $params['Offset'] = 0;
         $counter = 1;
         $runs = ceil( $subtreeCount / $max_all );
-        if ( ! $isQuiet )
+        if ( ! $cli->isQuiet() )
         {
             $amount = $subtreeCount + 1; // for root node
             $cli->output( "Adding $amount nodes to the sitemap for RootNode $rootNode->NodeID." );
@@ -528,7 +589,7 @@ class xrowSitemapTools
         while ( $counter <= $runs )
         {
             eZDebug::writeDebug( 'Run ' . $counter . ' of ' . $runs . ' runs' );
-            if ( ! $isQuiet )
+            if ( ! $cli->isQuiet() )
             {
                 $cli->output( 'Run ' . $counter . ' of ' . $runs . ' runs' );
                 if ( $counter == 1 )
@@ -578,8 +639,7 @@ class xrowSitemapTools
                     $filename,
                     ezcBaseFileException::WRITE, 'Could not write data to cache file.' );
             }
-
-            if ( ! $isQuiet )
+            if ( ! $cli->isQuiet() )
             {
                 $cli->output( "\n" );
                 $cli->output( "Time: " . date( 'd.m.Y H:i:s' ) . ". Action: Sitemap $filename for siteaccess " . $GLOBALS['eZCurrentAccess']['name'] . " has been generated in $cachedir.\n" );
@@ -600,27 +660,38 @@ class xrowSitemapTools
             $max_all += $max;
             $sitemap = new xrowSitemap();
         }
-        self::cleanDir($dir);
+        $handler = eZClusterFileHandler::instance();
+        if ( $handler instanceof eZDFSFileHandler or $handler instanceof eZDBFileHandler )
+        {
+            self::cleanDir($cachedir);
+        }
         //move all from cache to cluster filesystem
         foreach( $sitemapfiles as $key => $sitemapfile )
         {
             $file = eZClusterFileHandler::instance( $sitemapfile );
             $file->storeContents( file_get_contents( $tmpsitemapfiles[$key] ), 'sitemap', 'text/xml' );
-            if ( ! $isQuiet )
+            if ( ! $cli->isQuiet() )
             {
                 $cli->output( "\n" );
                 $cli->output( "Time: " . date( 'd.m.Y H:i:s' ) . ". Action: Sitemap $filename for siteaccess " . $GLOBALS['eZCurrentAccess']['name'] . " has been moved to $dir.\n" );
             }
-            unlink( $tmpsitemapfiles[$key] );
+            if ( $handler instanceof eZDFSFileHandler or $handler instanceof eZDBFileHandler )
+            {
+                unlink( $tmpsitemapfiles[$key] );
+            }
+        }
+        if ( $handler instanceof eZFSFileHandler )
+        {
+            self::cleanDir($cachedir);
         }
     }
 
     public static function createNewsSitemap()
     {
         eZDebug::writeDebug( "Generating news sitemap ...", __METHOD__ );
-        $cli = $GLOBALS['cli'];
-        global $cli, $isQuiet;
-        if ( ! $isQuiet )
+
+        $cli = eZCLI::instance();
+        if ( ! $cli->isQuiet() )
         {
             $cli->output( "Generating new sitemap for siteaccess " . $GLOBALS['eZCurrentAccess']['name'] . " \n" );
         }
@@ -780,7 +851,7 @@ class xrowSitemapTools
         $params['Offset'] = 0;
         $counter = 1;
         $runs = ceil( $subtreeCount / $max_all );
-        if ( ! $isQuiet )
+        if ( ! $cli->isQuiet() )
         {
             $amount = $subtreeCount;
             $cli->output( "Adding $amount nodes to the news sitemap." );
@@ -791,7 +862,7 @@ class xrowSitemapTools
         while ( $counter <= $runs )
         {
             eZDebug::writeDebug( 'Run ' . $counter . ' of ' . $runs . ' runs' );
-            if ( ! $isQuiet )
+            if ( ! $cli->isQuiet() )
             {
                 $cli->output( 'Run ' . $counter . ' of ' . $runs . ' runs' );
                 if ( $counter == 1 )
@@ -822,7 +893,7 @@ class xrowSitemapTools
 
                     $url = $node->attribute( 'url_alias' );
                     eZURI::transformURI( $url, true );
-                    $url = 'http://' . self::domain() . $url;
+                    $url = 'https://' . self::domain() . $url;
                     $sitemap->add( $url, $extensions );
 
                     if ( isset( $bar ) )
@@ -846,7 +917,7 @@ class xrowSitemapTools
                 $filename = $dir . '/' . xrowSitemap::BASENAME . '_' . self::FILETYP_NEWS . '_' . $GLOBALS['eZCurrentAccess']['name'] . '_' . $counter . '.' . xrowSitemap::SUFFIX;
             }
             $sitemap->save( $filename );
-            if ( ! $isQuiet )
+            if ( ! $cli->isQuiet() )
             {
                 $cli->output( "\n" );
                 $cli->output( "Time: " . date( 'd.m.Y H:i:s' ) . ". Action: Sitemap $filename for siteaccess " . $GLOBALS['eZCurrentAccess']['name'] . " has been generated.\n" );
@@ -861,9 +932,9 @@ class xrowSitemapTools
     public static function createMobileSitemap()
     {
         eZDebug::writeDebug( "Generating mobile sitemap ...", __METHOD__ );
-        $cli = $GLOBALS['cli'];
-        global $cli, $isQuiet;
-        if ( ! $isQuiet )
+        
+        $cli = eZCLI::instance();
+        if ( ! $cli->isQuiet() )
         {
             $cli->output( "Generating mobile sitemap for siteaccess " . $GLOBALS['eZCurrentAccess']['name'] . " \n" );
         }
@@ -908,7 +979,7 @@ class xrowSitemapTools
             $cli->output( "No Items found under RootNode $rootNode->NodeID." );
         }
 
-        if ( ! $isQuiet )
+        if ( ! $cli->isQuiet() )
         {
             $amount = $subtreeCount + 1; // +1 is root node
             $cli->output( "Adding $amount nodes to the sitemap for RootNode $rootNode->NodeID." );
@@ -945,7 +1016,7 @@ class xrowSitemapTools
         }
 
 
-        $url = 'http://' . $mobileDomain . $url;
+        $url = 'https://' . $mobileDomain . $url;
 
         if ( $meta and $meta->sitemap_use != '0' )
         {
@@ -983,7 +1054,7 @@ class xrowSitemapTools
 
                 $url = $subTreeNode->attribute( 'url_alias' );
                 eZURI::transformURI( $url );
-                $url = 'http://' . $mobileDomain . $url;
+                $url = 'https://' . $mobileDomain . $url;
 
                 if ( $meta and $meta->sitemap_use != '0' )
                 {
@@ -1033,7 +1104,7 @@ class xrowSitemapTools
             $filename .= '.gz';
         }
          **/
-        if ( ! $isQuiet )
+        if ( ! $cli->isQuiet() )
         {
             $cli->output( "\n" );
             $cli->output( "Mobile sitemap $filename for siteaccess " . $GLOBALS['eZCurrentAccess']['name'] . " has been generated.\n" );
@@ -1643,6 +1714,31 @@ class xrowSitemapTools
                 }
             }
         }
+    }
+    
+    /*!
+     get URI for the current object
+     return the URI
+     */
+    public static function getUri( $urimatchMapitems )
+    {
+        foreach ( $urimatchMapitems as $hostUriMap )
+        {
+            $hostUri = explode( ';', $hostUriMap );
+            if ( count( $hostUri ) < 3 )
+            {
+                $accessname = $hostUri[1];
+                $uri = '';
+            } else {
+                $accessname = $hostUri[2];
+                $uri = $hostUri[1];
+            }
+            if ( $accessname == $GLOBALS['eZCurrentAccess']['name'] )
+            {
+                break;
+            }
+        }
+        return $uri;
     }
 }
 

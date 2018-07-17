@@ -31,16 +31,25 @@ VideoSitemap=enabled
 AlwaysAdd=enabled
 MobileSitemap=disabled
 
+# Siteaccesses without a sitemap
+# ExcludeSiteaccess[]
+
 [SitemapSettings]
 # here you need to specify every siteaccess a sitemap shall be created for
 # if no siteaccessarray is given, the default siteaccess will be used for generation
 # AvailableSiteAccessList[]
 # AvailableSiteAccessList[]=ger
 # AvailableSiteAccessList[]=eng
+# Each entry consists of the hostname;uri;accessname[;start|end|part|strict]
 #HostUriMatchMapItems[]
-#HostUriMatchMapItems[]=www.xxxxxxxx.de;x_de
-#HostUriMatchMapItems[]=www.xxxxxxxx.de;xx_de
+#HostUriMatchMapItems[]=www.xxxxxxxx.de;de;x_de
+#HostUriMatchMapItems[]=www.xxxxxxxx.de;;xx_de
 MainNodeOnly=false
+
+# If any site accesses use the PathPrefix setting, enter them here
+#PathPrefix[]
+#PathPrefix[]=XXXX;x_de
+#PathPrefix[]=YYYY;x_en
 
 # include or exclude objects of classes listed in ClassFilterArray
 #ClassFilterType=exclude

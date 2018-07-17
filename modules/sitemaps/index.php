@@ -15,6 +15,13 @@ else
     );
 }
 
+
+// adding the mobile sitemap site accesses
+if ( $xrowsitemapINI->hasVariable( 'MobileSitemapSettings', 'AvailableSiteAccessList' ) )
+{
+    $siteAccessArray = array_merge( $siteAccessArray, $xrowsitemapINI->variable( 'MobileSitemapSettings', 'AvailableSiteAccessList' ) );
+}
+
 $Module = $Params['Module'];
 $access = $GLOBALS['eZCurrentAccess']['name'];
 
@@ -74,9 +81,8 @@ function addFiles( &$index, $dirname, $dirArray )
             }
             if ( $file->size() > 50 )
             {
-                $date = new xrowSitemapItemModified();
-                $date->date = new DateTime( "@" . $file->mtime() );
-                $loc = 'http://' . $_SERVER['HTTP_HOST'] . '/' . $file->name();
+                $date = new xrowSitemapItemModified($file->mtime());
+                $loc = 'https://' . $_SERVER['HTTP_HOST'] . '/' . $file->name();
                 if ( !in_array( $loc, $GLOBALS['loc'] ) )
                 {
                     $GLOBALS['loc'][] = $loc;
