@@ -2,7 +2,10 @@
 
 /* Legacy 4.2 */
 //require_once "access.php";
-
+/**
+ * @codingStandardsIgnoreStart
+ * @SuppressWarnings(PHPMD)
+ */
 class xrowSitemapTools
 {
     /* max. amount of links in 1 sitemap */
@@ -33,9 +36,9 @@ class xrowSitemapTools
             /* Change the siteaccess */
             self::changeAccess( array(
                 "name" => $siteaccess ,
-                "type" => EZ_ACCESS_TYPE_URI
+                "type" =>  eZSiteAccess::TYPE_URI
             ) );
-            
+
             if( $ini->hasVariable( 'UserSettings', 'AnonymousUserID' ) )
             {
                 $user_id= $ini->variable( 'UserSettings', 'AnonymousUserID' );
@@ -250,7 +253,7 @@ class xrowSitemapTools
                 return false;
             }
         }*/
-        
+
         if ( $ini->hasVariable( 'SitemapSettings', 'GalleryClasses' ) and $node->attribute( 'parent' ) instanceof eZContentObjectTreeNode and in_array( $node->attribute( 'parent' )->attribute( 'class_identifier' ), $ini->variable( 'SitemapSettings', 'GalleryClasses' ) ) and in_array( $node->attribute( 'class_identifier' ), $ini->variable( 'SitemapSettings', 'ImageClasses' ) ) )
         {
             return false;
@@ -258,7 +261,7 @@ class xrowSitemapTools
         $extensions[] = new xrowSitemapItemModified( $node->attribute( 'modified_subnode' ) );
 
         $url = $node->attribute( 'url_alias' );
-        
+
         // Remove PathPrefix if needed
         if ($ini->hasVariable( 'SitemapSettings', 'PathPrefix' ) )
         {
@@ -286,7 +289,7 @@ class xrowSitemapTools
             }
         }
         $urlAlias = $url;
-        
+
         //Ticket #10114 -  correction URLs
         if ( $ini->hasVariable( 'SitemapSettings', 'HostUriMatchMapItems' ) )
         {
@@ -298,7 +301,7 @@ class xrowSitemapTools
         if ( $host_uri !== '') {
             $url = $host_uri . '/' . $url;
         }
-        
+
         // $urlAlias is kept 'as is' to be able to generate these links
         eZURI::transformURI( $urlAlias, true );
         if ( $ini->hasVariable( 'SitemapSettings', 'CreateAlternateLink' ) )
@@ -404,7 +407,6 @@ class xrowSitemapTools
         $dir = new eZClusterDirectoryIterator( $dirname );
         foreach ( $dir as $file )
         {
-            echo "$file\n";
             if ( $file->exists() )
             {
                 $file->delete();
@@ -439,7 +441,7 @@ class xrowSitemapTools
 
     public static function createSitemap( $archive = false )
     {
-        $cli = eZCLI::instance();      
+        $cli = eZCLI::instance();
 
         $xrowsitemapINI = eZINI::instance( 'xrowsitemap.ini' );
         if ( ! $xrowsitemapINI->hasVariable( 'Settings', 'Archive' ) or $xrowsitemapINI->variable( 'Settings', 'Archive' ) != 'disabled' )
@@ -520,13 +522,13 @@ class xrowSitemapTools
         {
             $params['AttributeFilter'] = array( array( 'published', '>', $timestamp ) );
         }
-        
+
         if ( $xrowsitemapINI->hasVariable( 'SitemapSettings', 'ExtraAttributeFilter' ) )
         {
             $extra_attribute_filter = array();
             $extra_attribute_filter = $xrowsitemapINI->variable( 'SitemapSettings', 'ExtraAttributeFilter' );
         }
-        
+
         if ( isset( $extra_attribute_filter ) )
         {
             foreach ( $extra_attribute_filter as $key => $extra_attribute_filter_item )
@@ -534,11 +536,11 @@ class xrowSitemapTools
                 if ( $xrowsitemapINI->hasGroup( $extra_attribute_filter_item ) )
                 {
                     $value = $xrowsitemapINI->variable( $extra_attribute_filter_item, 'Value' );
-                    array_push( $params['AttributeFilter'], $value ); 
+                    array_push( $params['AttributeFilter'], $value );
                 }
             }
         }
-        
+
         if( $xrowsitemapINI->hasVariable( 'SitemapSettings', 'MainNodeOnly' ) && $xrowsitemapINI->Variable( 'SitemapSettings', 'MainNodeOnly' ) == "true" )
         {
             $params['MainNodeOnly'] = true;
@@ -560,7 +562,11 @@ class xrowSitemapTools
         // Generate Sitemap
         self::addNode( $sitemap, $rootNode );
 
-        $max = min( $max, $subtreeCount );
+        $additionalSubtreeCount = self::addSubtreeCount();
+
+        self::addSubtree($sitemap);
+
+        $max = min( $max, $subtreeCount, $additionalSubtreeCount );
         $max_all = $max;
         $params['Limit'] = $limit;
         $params['Offset'] = 0;
@@ -610,6 +616,17 @@ class xrowSitemapTools
                     if ( isset( $bar ) )
                     {
                         $bar->advance();
+                    }
+                }
+                foreach (self::$additionalSubtreeNodeIs as $subtreeNodeId) {
+                    $nodeArray = eZContentObjectTreeNode::subTreeByNodeID( $params, $subtreeNodeId );
+                    foreach ( $nodeArray as $subTreeNode )
+                    {
+                        self::addNode( $sitemap, $subTreeNode );
+                        if ( isset( $bar ) )
+                        {
+                            $bar->advance();
+                        }
                     }
                 }
                 eZContentObject::clearCache();
@@ -683,6 +700,40 @@ class xrowSitemapTools
         if ( $handler instanceof eZFSFileHandler )
         {
             self::cleanDir($cachedir);
+        }
+    }
+
+    public static function addSubtreeCount()
+    {
+        $cnt=0;
+        $ini = eZINI::instance('xrowsitemap.ini');
+        if ($ini->hasVariable('SitemapSettings', 'AdditionalSubtrees')) {
+            $subtrees = $ini->variable('SitemapSettings', 'AdditionalSubtrees');
+            foreach($subtrees as $siteaccess => $nodeListString) {
+                $nodeList = explode(";", $nodeListString);
+                self::$additionalSubtreeNodeIs = $nodeList;
+                foreach ($nodeList as $nodeId) {
+                    $cnt+= eZContentObjectTreeNode::subTreeCountByNodeID([], $nodeId);
+                }
+            }
+        }
+        return $cnt;
+    }
+
+    public static $additionalSubtreeNodeIs;
+
+    public static function addSubtree($sitemap)
+    {
+        $ini = eZINI::instance('xrowsitemap.ini');
+        if ($ini->hasVariable('SitemapSettings', 'AdditionalSubtrees')) {
+            $subtrees = $ini->variable('SitemapSettings', 'AdditionalSubtrees');
+            foreach($subtrees as $siteaccess => $nodeListString) {
+                $nodeList = explode(";", $nodeListString);
+                foreach ($nodeList as $nodeId) {
+                    $node = eZContentObjectTreeNode::fetch($nodeId);
+                    self::addNode($sitemap, $node);
+                }
+            }
         }
     }
 
@@ -880,7 +931,7 @@ class xrowSitemapTools
             while ( $params['Offset'] < $max_all )
             {
                 $nodeArray = eZContentObjectTreeNode::subTreeByNodeID( $params, $rootNode->NodeID );
-                
+
                 foreach ( $nodeArray as $node )
                 {
                     $extensions = array();
@@ -932,7 +983,7 @@ class xrowSitemapTools
     public static function createMobileSitemap()
     {
         eZDebug::writeDebug( "Generating mobile sitemap ...", __METHOD__ );
-        
+
         $cli = eZCLI::instance();
         if ( ! $cli->isQuiet() )
         {
@@ -1715,7 +1766,7 @@ class xrowSitemapTools
             }
         }
     }
-    
+
     /*!
      get URI for the current object
      return the URI
