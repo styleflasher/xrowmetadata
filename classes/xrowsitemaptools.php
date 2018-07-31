@@ -421,7 +421,8 @@ class xrowSitemapTools
      */
     public static function rootNode()
     {
-        $node_id = eZINI::instance( 'content.ini' )->variable( 'NodeSettings', 'RootNode' );
+        $node_id = eZINI::instance('content.ini.append.php',"settings/siteaccess/".$GLOBALS['eZCurrentAccess']['name'])
+            ->variable( 'NodeSettings', 'RootNode' );
         if( self::$rootNode === null || $node_id != self::$rootNode )
         {
             $rootNode = eZContentObjectTreeNode::fetch( $node_id );
@@ -562,7 +563,7 @@ class xrowSitemapTools
         // Generate Sitemap
         self::addNode( $sitemap, $rootNode );
 
-        $subtreeCount += self::addSubtreeCount();
+        $subtreeCount += self::addSubtreeCount($params);
 
         self::addSubtree($sitemap);
 
@@ -703,13 +704,13 @@ class xrowSitemapTools
         }
     }
 
-    public static function addSubtreeCount()
+    public static function addSubtreeCount($params)
     {
         $cnt=0;
         $nodeList = self::getAdditionalSubtreeIds();
         self::$additionalSubtreeNodeIs = $nodeList;
         foreach ($nodeList as $nodeId) {
-            $cnt+= eZContentObjectTreeNode::subTreeCountByNodeID([], $nodeId);
+            $cnt+= eZContentObjectTreeNode::subTreeCountByNodeID($params, $nodeId);
         }
         return $cnt;
     }
